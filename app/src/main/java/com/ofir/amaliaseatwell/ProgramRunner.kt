@@ -12,13 +12,21 @@ import java.util.Calendar
  *     חכה 10 דקות
  *   סוף
  *
- * Commands: send/שלח <button name or AA:CC>, wait/חכה <time>, repeat/חזור <n> … end/סוף
+ * Commands: send/שלח <button | remote/button | AA:CC>, wait/חכה <time>, repeat/חזור <n> … end/סוף
  */
 class ProgramRunner(
     private val store: Store,
-    private val ir: IrSender,
-    private val status: (String) -> Unit
+    private val ir: IrSender
 ) {
+    @Volatile var statusListener: ((String) -> Unit)? = null
+    @Volatile var lastStatus: String = "אין תוכנית פעילה."
+        private set
+
+    private fun status(s: String) {
+        lastStatus = s
+        statusListener?.invoke(s)
+    }
+
     sealed class Step {
         class Send(val address: Int, val command: Int, val label: String) : Step()
         class Wait(val ms: Long) : Step()
@@ -68,8 +76,7 @@ class ProgramRunner(
     private fun resolve(arg: String): Pair<Int, Int>? {
         val m = Regex("^([0-9A-Fa-f]{2}):([0-9A-Fa-f]{2})$").find(arg)
         if (m != null) return m.groupValues[1].toInt(16) to m.groupValues[2].toInt(16)
-        val c = store.findByName(arg) ?: return null
-        return c.address to c.command
+        return store.findCode(arg)
     }
 
     private fun parseDuration(arg: String): Long? {
